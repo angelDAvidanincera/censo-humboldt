@@ -1,18 +1,17 @@
-const pool = require("../database/db");
+const db = require("../database/sqlite");
 
-const obtenerCategorias = async (req, res) => {
+const obtenerCategorias = (req, res) => {
   try {
-    const resultado = await pool.query(`
+    const categorias = db.prepare(`
       SELECT
         id_categoria,
         codigo,
         nombre
       FROM categorias_giro
       ORDER BY id_categoria
-    `);
+    `).all();
 
-    res.json(resultado.rows);
-
+    res.json(categorias);
   } catch (error) {
     console.error("Error al obtener categorías:", error);
 

@@ -1,5 +1,8 @@
-require("dotenv").config();
+const path = require("path");
 
+require("dotenv").config({
+  path: path.join(__dirname, "../.env"),
+});
 
 const express = require("express");
 const cors = require("cors");
@@ -17,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
 app.use("/api/categorias", categoriasRoutes);
 app.use("/api/medios-pago", mediosPagoRoutes);
 app.use("/api/equipamientos", equipamientosRoutes);
@@ -43,9 +47,7 @@ app.get("/api/health", async (req, res) => {
       fecha: resultado.rows[0].fecha,
       baseDatos: resultado.rows[0].base_datos,
     });
-
   } catch (error) {
-
     console.error("Error de PostgreSQL:", error);
 
     res.status(500).json({
@@ -55,6 +57,43 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
-});
+let servidor = null;
+
+function iniciarServidor() {
+  if (servidor) {
+    return servidor;
+  }
+
+  servidor = app.listen(PORT, () => {
+    console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
+  });
+
+  return servidor;
+}
+
+function detenerServidor() {
+  if (servidor) {
+    servidor.close();
+    servidor = null;
+  }
+}
+
+/*
+  Si ejecutamos:
+  node src/server.js
+  o npm run dev
+
+  el servidor se inicia normalmente.
+
+  Si Electron importa este archivo,
+  no arranca hasta que Electron llame iniciarServidor().
+*/
+if (require.main === module) {
+  iniciarServidor();
+}
+
+module.exports = {
+  app,
+  iniciarServidor,
+  detenerServidor,
+};

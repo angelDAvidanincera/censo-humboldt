@@ -31,3 +31,9 @@ Thumbs.db
 
 # VS Code
 .vscode/
+
+# Base de datos local SQLite
+data/
+*.db
+*.db-wal
+*.db-shm

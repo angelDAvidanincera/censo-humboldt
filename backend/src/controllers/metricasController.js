@@ -1,6 +1,6 @@
-const pool = require("../database/db");
+const db = require("../database/sqlite");
 
-const obtenerMetricas = async (req, res) => {
+const obtenerMetricas = (req, res) => {
   try {
     const {
       categoria,
@@ -16,103 +16,101 @@ const obtenerMetricas = async (req, res) => {
       equipamiento,
     } = req.query;
 
-    const valores = [
-      categoria ? Number(categoria) : null,
-      genero || null,
-      edadMin !== undefined && edadMin !== ""
-        ? Number(edadMin)
-        : null,
-      edadMax !== undefined && edadMax !== ""
-        ? Number(edadMax)
-        : null,
-      estatus || null,
-      cuenta === "true"
-        ? true
-        : cuenta === "false"
-          ? false
-          : null,
-      banco || null,
-      pagos === "true"
-        ? true
-        : pagos === "false"
-          ? false
-          : null,
-      medioPago ? Number(medioPago) : null,
-      herramientas === "true"
-        ? true
-        : herramientas === "false"
-          ? false
-          : null,
-      equipamiento ? Number(equipamiento) : null,
-    ];
+    // ======================================================
+    // FILTROS DINÁMICOS
+    // ======================================================
 
-    const filtros = `
-      WHERE
-        ($1::BIGINT IS NULL OR c.id_categoria = $1)
+    const condiciones = [];
+    const parametros = [];
 
-        AND (
-          $2::TEXT IS NULL
-          OR co.genero = $2
+    if (categoria) {
+      condiciones.push("c.id_categoria = ?");
+      parametros.push(Number(categoria));
+    }
+
+    if (genero) {
+      condiciones.push("co.genero = ?");
+      parametros.push(genero);
+    }
+
+    if (edadMin !== undefined && edadMin !== "") {
+      condiciones.push("co.edad >= ?");
+      parametros.push(Number(edadMin));
+    }
+
+    if (edadMax !== undefined && edadMax !== "") {
+      condiciones.push("co.edad <= ?");
+      parametros.push(Number(edadMax));
+    }
+
+    if (estatus) {
+      condiciones.push("c.estatus_local = ?");
+      parametros.push(estatus);
+    }
+
+    if (cuenta === "true") {
+      condiciones.push("c.tiene_cuenta_bancaria = 1");
+    }
+
+    if (cuenta === "false") {
+      condiciones.push("c.tiene_cuenta_bancaria = 0");
+    }
+
+    if (banco) {
+      condiciones.push(`
+        LOWER(TRIM(c.institucion_bancaria))
+        = LOWER(TRIM(?))
+      `);
+
+      parametros.push(banco);
+    }
+
+    if (pagos === "true") {
+      condiciones.push("c.acepta_pagos_digitales = 1");
+    }
+
+    if (pagos === "false") {
+      condiciones.push("c.acepta_pagos_digitales = 0");
+    }
+
+    if (medioPago) {
+      condiciones.push(`
+        EXISTS (
+          SELECT 1
+          FROM censo_medios_pago cmp_filtro
+          WHERE cmp_filtro.id_censo = c.id_censo
+            AND cmp_filtro.id_medio_pago = ?
         )
+      `);
 
-        AND (
-          $3::INTEGER IS NULL
-          OR co.edad >= $3
-        )
+      parametros.push(Number(medioPago));
+    }
 
-        AND (
-          $4::INTEGER IS NULL
-          OR co.edad <= $4
-        )
+    if (herramientas === "true") {
+      condiciones.push("c.usa_herramientas_tec = 1");
+    }
 
-        AND (
-          $5::TEXT IS NULL
-          OR c.estatus_local = $5
-        )
+    if (herramientas === "false") {
+      condiciones.push("c.usa_herramientas_tec = 0");
+    }
 
-        AND (
-          $6::BOOLEAN IS NULL
-          OR c.tiene_cuenta_bancaria = $6
+    if (equipamiento) {
+      condiciones.push(`
+        EXISTS (
+          SELECT 1
+          FROM censo_equipamiento ce_filtro
+          WHERE ce_filtro.id_censo = c.id_censo
+            AND ce_filtro.id_equipamiento = ?
         )
+      `);
 
-        AND (
-          $7::TEXT IS NULL
-          OR LOWER(TRIM(c.institucion_bancaria))
-             = LOWER(TRIM($7))
-        )
+      parametros.push(Number(equipamiento));
+    }
 
-        AND (
-          $8::BOOLEAN IS NULL
-          OR c.acepta_pagos_digitales = $8
-        )
-
-        AND (
-          $9::BIGINT IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM censo_medios_pago cmp_filtro
-            WHERE
-              cmp_filtro.id_censo = c.id_censo
-              AND cmp_filtro.id_medio_pago = $9
-          )
-        )
-
-        AND (
-          $10::BOOLEAN IS NULL
-          OR c.usa_herramientas_tec = $10
-        )
-
-        AND (
-          $11::BIGINT IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM censo_equipamiento ce_filtro
-            WHERE
-              ce_filtro.id_censo = c.id_censo
-              AND ce_filtro.id_equipamiento = $11
-          )
-        )
-    `;
+    const where =
+      condiciones.length > 0
+        ? `WHERE ${condiciones.join(" AND ")}`
+        : "";
 
     const crearCTE = `
       WITH filtrados AS (
@@ -125,72 +123,81 @@ const obtenerMetricas = async (req, res) => {
         INNER JOIN comerciantes co
           ON co.id_comerciante = c.id_comerciante
 
-        ${filtros}
+        ${where}
       )
     `;
 
+    // ======================================================
     // RESUMEN
+    // ======================================================
 
-    const resumen = await pool.query(
-      `
+    const resumen = db.prepare(`
       ${crearCTE}
 
       SELECT
-        COUNT(*)::INTEGER AS total_censos,
+        COUNT(*) AS total_censos,
 
-        COUNT(*) FILTER (
-          WHERE tiene_cuenta_bancaria = TRUE
-        )::INTEGER AS con_cuenta_bancaria,
+        SUM(
+          CASE WHEN tiene_cuenta_bancaria = 1
+          THEN 1 ELSE 0 END
+        ) AS con_cuenta_bancaria,
 
-        COUNT(*) FILTER (
-          WHERE tiene_cuenta_bancaria = FALSE
-        )::INTEGER AS sin_cuenta_bancaria,
+        SUM(
+          CASE WHEN tiene_cuenta_bancaria = 0
+          THEN 1 ELSE 0 END
+        ) AS sin_cuenta_bancaria,
 
-        COUNT(*) FILTER (
-          WHERE acepta_pagos_digitales = TRUE
-        )::INTEGER AS acepta_pagos_digitales,
+        SUM(
+          CASE WHEN acepta_pagos_digitales = 1
+          THEN 1 ELSE 0 END
+        ) AS acepta_pagos_digitales,
 
-        COUNT(*) FILTER (
-          WHERE acepta_pagos_digitales = FALSE
-        )::INTEGER AS no_acepta_pagos_digitales,
+        SUM(
+          CASE WHEN acepta_pagos_digitales = 0
+          THEN 1 ELSE 0 END
+        ) AS no_acepta_pagos_digitales,
 
-        COUNT(*) FILTER (
-          WHERE usa_herramientas_tec = TRUE
-        )::INTEGER AS usa_herramientas,
+        SUM(
+          CASE WHEN usa_herramientas_tec = 1
+          THEN 1 ELSE 0 END
+        ) AS usa_herramientas,
 
-        COUNT(*) FILTER (
-          WHERE usa_herramientas_tec = FALSE
-        )::INTEGER AS no_usa_herramientas,
+        SUM(
+          CASE WHEN usa_herramientas_tec = 0
+          THEN 1 ELSE 0 END
+        ) AS no_usa_herramientas,
 
-        COUNT(*) FILTER (
-          WHERE estatus_local = 'Activo'
-        )::INTEGER AS locales_activos,
+        SUM(
+          CASE WHEN estatus_local = 'Activo'
+          THEN 1 ELSE 0 END
+        ) AS locales_activos,
 
-        COUNT(*) FILTER (
-          WHERE estatus_local = 'Bodega'
-        )::INTEGER AS locales_bodega,
+        SUM(
+          CASE WHEN estatus_local = 'Bodega'
+          THEN 1 ELSE 0 END
+        ) AS locales_bodega,
 
-        COUNT(*) FILTER (
-          WHERE estatus_local = 'Cerrado'
-        )::INTEGER AS locales_cerrados,
+        SUM(
+          CASE WHEN estatus_local = 'Cerrado'
+          THEN 1 ELSE 0 END
+        ) AS locales_cerrados,
 
         ROUND(AVG(edad), 1) AS edad_promedio
 
       FROM filtrados
-      `,
-      valores
-    );
+    `).get(...parametros);
 
+    // ======================================================
     // CATEGORÍAS
+    // ======================================================
 
-    const categorias = await pool.query(
-      `
+    const categorias = db.prepare(`
       ${crearCTE}
 
       SELECT
         COALESCE(cg.codigo, 'SIN') AS codigo,
         COALESCE(cg.nombre, 'Sin categoría') AS nombre,
-        COUNT(*)::INTEGER AS total
+        COUNT(*) AS total
 
       FROM filtrados f
 
@@ -203,20 +210,18 @@ const obtenerMetricas = async (req, res) => {
         cg.nombre
 
       ORDER BY total DESC
-      `,
-      valores
-    );
+    `).all(...parametros);
 
-    // INSTITUCIONES BANCARIAS
-    // AQUÍ YA CONTAMOS TAMBIÉN A QUIENES NO TIENEN CUENTA
+    // ======================================================
+    // BANCOS
+    // ======================================================
 
-    const bancos = await pool.query(
-      `
+    const bancos = db.prepare(`
       ${crearCTE}
 
       SELECT
         CASE
-          WHEN tiene_cuenta_bancaria = FALSE
+          WHEN tiene_cuenta_bancaria = 0
             THEN 'No tiene cuenta bancaria'
 
           WHEN institucion_bancaria IS NULL
@@ -226,13 +231,13 @@ const obtenerMetricas = async (req, res) => {
           ELSE TRIM(institucion_bancaria)
         END AS banco,
 
-        COUNT(*)::INTEGER AS total
+        COUNT(*) AS total
 
       FROM filtrados
 
       GROUP BY
         CASE
-          WHEN tiene_cuenta_bancaria = FALSE
+          WHEN tiene_cuenta_bancaria = 0
             THEN 'No tiene cuenta bancaria'
 
           WHEN institucion_bancaria IS NULL
@@ -243,20 +248,19 @@ const obtenerMetricas = async (req, res) => {
         END
 
       ORDER BY total DESC, banco
-      `,
-      valores
-    );
+    `).all(...parametros);
 
+    // ======================================================
     // MEDIOS DE PAGO
+    // ======================================================
 
-    const mediosPago = await pool.query(
-      `
+    const mediosPagoDatos = db.prepare(`
       ${crearCTE}
 
       SELECT
         mp.id_medio_pago,
         mp.nombre,
-        COUNT(f.id_censo)::INTEGER AS total
+        COUNT(f.id_censo) AS total
 
       FROM medios_pago mp
 
@@ -271,20 +275,19 @@ const obtenerMetricas = async (req, res) => {
         mp.nombre
 
       ORDER BY total DESC, mp.nombre
-      `,
-      valores
-    );
+    `).all(...parametros);
 
-    // EQUIPAMIENTO
+    // ======================================================
+    // EQUIPAMIENTOS
+    // ======================================================
 
-    const equipamientos = await pool.query(
-      `
+    const equipamientosDatos = db.prepare(`
       ${crearCTE}
 
       SELECT
         e.id_equipamiento,
         e.nombre,
-        COUNT(f.id_censo)::INTEGER AS total
+        COUNT(f.id_censo) AS total
 
       FROM equipamientos e
 
@@ -299,33 +302,31 @@ const obtenerMetricas = async (req, res) => {
         e.nombre
 
       ORDER BY total DESC, e.nombre
-      `,
-      valores
-    );
+    `).all(...parametros);
 
-    // GÉNERO
+    // ======================================================
+    // GÉNEROS
+    // ======================================================
 
-    const generos = await pool.query(
-      `
+    const generos = db.prepare(`
       ${crearCTE}
 
       SELECT
         COALESCE(genero, 'No especificado') AS genero,
-        COUNT(*)::INTEGER AS total
+        COUNT(*) AS total
 
       FROM filtrados
 
       GROUP BY genero
 
       ORDER BY total DESC
-      `,
-      valores
-    );
+    `).all(...parametros);
 
-    // EDADES
+    // ======================================================
+    // RANGOS DE EDAD
+    // ======================================================
 
-    const edades = await pool.query(
-      `
+    const edades = db.prepare(`
       ${crearCTE}
 
       SELECT
@@ -339,7 +340,7 @@ const obtenerMetricas = async (req, res) => {
           ELSE '60+'
         END AS rango,
 
-        COUNT(*)::INTEGER AS total
+        COUNT(*) AS total
 
       FROM filtrados
 
@@ -361,92 +362,121 @@ const obtenerMetricas = async (req, res) => {
             ELSE edad
           END
         )
-      `,
-      valores
-    );
+    `).all(...parametros);
 
-    // OPCIONES PARA LOS FILTROS
-    // Estas NO dependen de los filtros seleccionados.
+    // ======================================================
+    // OPCIONES DE FILTRO
+    // ======================================================
 
-    const opcionesCategorias = await pool.query(`
+    const opcionesCategorias = db.prepare(`
       SELECT id_categoria, codigo, nombre
       FROM categorias_giro
       ORDER BY id_categoria
-    `);
+    `).all();
 
-    const opcionesGeneros = await pool.query(`
+    const opcionesGeneros = db.prepare(`
       SELECT DISTINCT genero
       FROM comerciantes
       WHERE genero IS NOT NULL
       ORDER BY genero
-    `);
+    `).all();
 
-    const opcionesBancos = await pool.query(`
+    const opcionesBancos = db.prepare(`
       SELECT DISTINCT
         TRIM(institucion_bancaria) AS banco
 
       FROM censos
 
       WHERE
-        tiene_cuenta_bancaria = TRUE
+        tiene_cuenta_bancaria = 1
         AND institucion_bancaria IS NOT NULL
         AND TRIM(institucion_bancaria) <> ''
 
       ORDER BY banco
-    `);
+    `).all();
 
-    const opcionesMedios = await pool.query(`
+    const opcionesMedios = db.prepare(`
       SELECT id_medio_pago, nombre
       FROM medios_pago
       ORDER BY nombre
-    `);
+    `).all();
 
-    const opcionesEquipamientos = await pool.query(`
+    const opcionesEquipamientos = db.prepare(`
       SELECT id_equipamiento, nombre
       FROM equipamientos
       ORDER BY nombre
-    `);
+    `).all();
+
+    // ======================================================
+    // RESPUESTA
+    // ======================================================
 
     res.json({
       filtrosAplicados: {
-        categoria: valores[0],
-        genero: valores[1],
-        edadMin: valores[2],
-        edadMax: valores[3],
-        estatus: valores[4],
-        cuenta: valores[5],
-        banco: valores[6],
-        pagos: valores[7],
-        medioPago: valores[8],
-        herramientas: valores[9],
-        equipamiento: valores[10],
+        categoria: categoria ? Number(categoria) : null,
+        genero: genero || null,
+        edadMin:
+          edadMin !== undefined && edadMin !== ""
+            ? Number(edadMin)
+            : null,
+        edadMax:
+          edadMax !== undefined && edadMax !== ""
+            ? Number(edadMax)
+            : null,
+        estatus: estatus || null,
+        cuenta:
+          cuenta === "true"
+            ? true
+            : cuenta === "false"
+              ? false
+              : null,
+        banco: banco || null,
+        pagos:
+          pagos === "true"
+            ? true
+            : pagos === "false"
+              ? false
+              : null,
+        medioPago: medioPago
+          ? Number(medioPago)
+          : null,
+        herramientas:
+          herramientas === "true"
+            ? true
+            : herramientas === "false"
+              ? false
+              : null,
+        equipamiento: equipamiento
+          ? Number(equipamiento)
+          : null,
       },
 
-      resumen: resumen.rows[0],
-      categorias: categorias.rows,
-      bancos: bancos.rows,
-      mediosPago: mediosPago.rows,
-      equipamientos: equipamientos.rows,
-      generos: generos.rows,
-      edades: edades.rows,
+      resumen,
+      categorias,
+      bancos,
+      mediosPago: mediosPagoDatos,
+      equipamientos: equipamientosDatos,
+      generos,
+      edades,
 
       opcionesFiltros: {
-        categorias: opcionesCategorias.rows,
-        generos: opcionesGeneros.rows,
-        bancos: opcionesBancos.rows,
-        mediosPago: opcionesMedios.rows,
-        equipamientos: opcionesEquipamientos.rows,
+        categorias: opcionesCategorias,
+        generos: opcionesGeneros,
+        bancos: opcionesBancos,
+        mediosPago: opcionesMedios,
+        equipamientos: opcionesEquipamientos,
       },
     });
 
   } catch (error) {
     console.error(
-      "Error al obtener métricas:",
+      "Error al obtener métricas SQLite:",
       error
     );
 
     res.status(500).json({
       mensaje: "Error al obtener las métricas",
+      error: error.message,
     });
   }
 };

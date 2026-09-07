@@ -1,17 +1,16 @@
-const pool = require("../database/db");
+const db = require("../database/sqlite");
 
-const obtenerMediosPago = async (req, res) => {
+const obtenerMediosPago = (req, res) => {
   try {
-    const resultado = await pool.query(`
+    const mediosPago = db.prepare(`
       SELECT
         id_medio_pago,
         nombre
       FROM medios_pago
       ORDER BY id_medio_pago
-    `);
+    `).all();
 
-    res.json(resultado.rows);
-
+    res.json(mediosPago);
   } catch (error) {
     console.error("Error al obtener medios de pago:", error);
 

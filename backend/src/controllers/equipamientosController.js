@@ -1,17 +1,16 @@
-const pool = require("../database/db");
+const db = require("../database/sqlite");
 
-const obtenerEquipamientos = async (req, res) => {
+const obtenerEquipamientos = (req, res) => {
   try {
-    const resultado = await pool.query(`
+    const equipamientos = db.prepare(`
       SELECT
         id_equipamiento,
         nombre
       FROM equipamientos
       ORDER BY id_equipamiento
-    `);
+    `).all();
 
-    res.json(resultado.rows);
-
+    res.json(equipamientos);
   } catch (error) {
     console.error("Error al obtener equipamientos:", error);
 
