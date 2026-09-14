@@ -33,8 +33,9 @@ function App() {
   const [categorias, setCategorias] = useState([]);
   const [mediosPago, setMediosPago] = useState([]);
   const [equipamientos, setEquipamientos] = useState([]);
+  const [mercados, setMercados] = useState([]);
   const [mensaje, setMensaje] = useState("");
-const [guardando, setGuardando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
   const [mediosSeleccionados, setMediosSeleccionados] =
     useState([]);
@@ -49,10 +50,12 @@ const [guardando, setGuardando] = useState(false);
           respuestaCategorias,
           respuestaMedios,
           respuestaEquipamientos,
+          respuestaMercados,
         ] = await Promise.all([
           fetch("http://localhost:3000/api/categorias"),
           fetch("http://localhost:3000/api/medios-pago"),
           fetch("http://localhost:3000/api/equipamientos"),
+          fetch("http://localhost:3000/api/mercados"),
         ]);
 
         const categoriasData =
@@ -64,9 +67,13 @@ const [guardando, setGuardando] = useState(false);
         const equipamientosData =
           await respuestaEquipamientos.json();
 
+        const mercadosData =
+          await respuestaMercados.json();
+
         setCategorias(categoriasData);
         setMediosPago(mediosData);
         setEquipamientos(equipamientosData);
+        setMercados(mercadosData);
 
       } catch (error) {
         console.error(
@@ -284,8 +291,6 @@ const [guardando, setGuardando] = useState(false);
 
     setFormulario({
       ...estadoInicial,
-      mercado: "Mercado Humboldt",
-      estatus_local: "Activo",
     });
 
     setMediosSeleccionados([]);
@@ -309,14 +314,13 @@ const [guardando, setGuardando] = useState(false);
       <header className="encabezado">
         <div>
           <p className="etiqueta">
-            Mercado Humboldt
+            CENSO DE MERCADOS
           </p>
 
           <h1>Censo de Comerciantes</h1>
 
           <p className="descripcion">
-            Sistema de captura de información del
-            comerciante y su local.
+            Sistema de captura y análisis de información de comerciantes.
           </p>
         </div>
       </header>
@@ -467,14 +471,28 @@ const [guardando, setGuardando] = useState(false);
           <div className="grid-formulario">
 
             <div className="campo">
-              <label>Mercado *</label>
+  <label>Mercado / Plaza *</label>
 
-              <input
-                name="mercado"
-                value={formulario.mercado}
-                onChange={cambiarCampo}
-              />
-            </div>
+  <select
+    name="mercado"
+    value={formulario.mercado}
+    onChange={cambiarCampo}
+    required
+  >
+    <option value="">
+      Seleccionar mercado...
+    </option>
+
+    {mercados.map((mercado) => (
+      <option
+        key={mercado.id_mercado}
+        value={mercado.nombre}
+      >
+        {mercado.nombre}
+      </option>
+    ))}
+  </select>
+</div>
 
             <div className="campo">
               <label>Número de local</label>

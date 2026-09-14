@@ -12,6 +12,8 @@ function Registros() {
   const [categorias, setCategorias] = useState([]);
   const [mediosPago, setMediosPago] = useState([]);
   const [equipamientos, setEquipamientos] = useState([]);
+  const [mercados, setMercados] = useState([]);
+  const [mercadoFiltro, setMercadoFiltro] = useState("");
 
   const cargarRegistros = async () => {
     try {
@@ -68,11 +70,14 @@ const cambiarSeleccionEdicion = (campo, id) => {
     fetch("http://localhost:3000/api/categorias").then((r) => r.json()),
     fetch("http://localhost:3000/api/medios-pago").then((r) => r.json()),
     fetch("http://localhost:3000/api/equipamientos").then((r) => r.json()),
+    fetch("http://localhost:3000/api/mercados").then((r) => r.json()),
   ])
-    .then(([datosCategorias, datosMedios, datosEquipamientos]) => {
+  .then(([datosCategorias, datosMedios, datosEquipamientos, datosMercados]) => {
+    
       setCategorias(datosCategorias);
       setMediosPago(datosMedios);
       setEquipamientos(datosEquipamientos);
+      setMercados(datosMercados);
     })
     .catch((error) => {
       console.error("Error cargando catálogos:", error);
@@ -193,23 +198,20 @@ const guardarEdicion = async () => {
 };
 
   const registrosFiltrados = registros.filter((registro) => {
-    const texto = busqueda.toLowerCase();
+  const texto = busqueda.toLowerCase();
 
-    return (
-      registro.nombre_completo
-        ?.toLowerCase()
-        .includes(texto) ||
-      registro.numero_local
-        ?.toLowerCase()
-        .includes(texto) ||
-      registro.giro_autorizado
-        ?.toLowerCase()
-        .includes(texto) ||
-      registro.categoria
-        ?.toLowerCase()
-        .includes(texto)
-    );
-  });
+  const coincideBusqueda =
+    registro.nombre_completo?.toLowerCase().includes(texto) ||
+    registro.numero_local?.toLowerCase().includes(texto) ||
+    registro.giro_autorizado?.toLowerCase().includes(texto) ||
+    registro.categoria?.toLowerCase().includes(texto);
+
+  const coincideMercado =
+    mercadoFiltro === "" ||
+    registro.mercado === mercadoFiltro;
+
+  return coincideBusqueda && coincideMercado;
+});
 
   const abrirEdicion = async (idCenso) => {
   try {
@@ -283,6 +285,26 @@ const guardarEdicion = async () => {
             placeholder="Nombre, local, giro o categoría..."
           />
         </div>
+
+        <div className="campo">
+  <label>Mercado / Plaza</label>
+
+  <select
+    value={mercadoFiltro}
+    onChange={(e) => setMercadoFiltro(e.target.value)}
+  >
+    <option value="">Todos los mercados</option>
+
+    {mercados.map((mercado) => (
+      <option
+        key={mercado.id_mercado}
+        value={mercado.nombre}
+      >
+        {mercado.nombre}
+      </option>
+    ))}
+  </select>
+</div>
 
         {error && (
           <div className="mensaje-error">
@@ -643,14 +665,27 @@ const guardarEdicion = async () => {
           </div>
 
           <div className="campo">
-            <label>Mercado *</label>
-            <input
-              value={registroEditando.mercado || ""}
-              onChange={(e) =>
-                cambiarCampoEdicion("mercado", e.target.value)
-              }
-            />
-          </div>
+  <label>Mercado / Plaza *</label>
+
+  <select
+    value={registroEditando.mercado || ""}
+    onChange={(e) =>
+      cambiarCampoEdicion("mercado", e.target.value)
+    }
+    required
+  >
+    <option value="">Seleccionar mercado...</option>
+
+    {mercados.map((mercado) => (
+      <option
+        key={mercado.id_mercado}
+        value={mercado.nombre}
+      >
+        {mercado.nombre}
+      </option>
+    ))}
+  </select>
+</div>
 
           <div className="campo">
             <label>Número de local</label>

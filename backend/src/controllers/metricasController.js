@@ -3,6 +3,7 @@ const db = require("../database/sqlite");
 const obtenerMetricas = (req, res) => {
   try {
     const {
+      mercado,
       categoria,
       genero,
       edadMin,
@@ -22,6 +23,11 @@ const obtenerMetricas = (req, res) => {
 
     const condiciones = [];
     const parametros = [];
+
+    if (mercado) {
+  condiciones.push("c.mercado = ?");
+  parametros.push(mercado);
+}
 
     if (categoria) {
       condiciones.push("c.id_categoria = ?");
@@ -413,6 +419,7 @@ const obtenerMetricas = (req, res) => {
 
     res.json({
       filtrosAplicados: {
+        mercado: mercado || null,
         categoria: categoria ? Number(categoria) : null,
         genero: genero || null,
         edadMin:

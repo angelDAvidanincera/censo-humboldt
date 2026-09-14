@@ -1,14 +1,57 @@
 {
   "name": "censo-humboldt-desktop",
-  "version": "0.2.0",
-  "description": "Aplicacion de escritorio para Censo Humboldt",
+  "version": "0.3.0",
+  "description": "Aplicacion de escritorio para Censo de Mercados",
   "main": "main.js",
+  "productName": "Censo de Mercados",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder"
   },
-  "author": "",
+  "author": "Angel David Anincera Valencia",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^44.1.0"
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "mx.censohumboldt.app",
+    "productName": "Censo de Mercados",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "../backend/src",
+        "to": "backend/src"
+      },
+      {
+        "from": "../backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../backend/node_modules",
+        "to": "backend/node_modules"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

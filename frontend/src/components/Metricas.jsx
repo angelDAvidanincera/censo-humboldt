@@ -19,8 +19,10 @@ function Metricas() {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [mercados, setMercados] = useState([]);
 
   const [filtros, setFiltros] = useState({
+  mercado: "",
   categoria: "",
   genero: "",
   edadMin: "",
@@ -33,6 +35,28 @@ function Metricas() {
   herramientas: "",
   equipamiento: "",
 });
+
+useEffect(() => {
+  const cargarMercados = async () => {
+    try {
+      const respuesta = await fetch(
+        "http://localhost:3000/api/mercados"
+      );
+
+      if (!respuesta.ok) {
+        throw new Error("No se pudieron cargar los mercados");
+      }
+
+      const resultado = await respuesta.json();
+      setMercados(resultado);
+
+    } catch (error) {
+      console.error("Error al cargar mercados:", error);
+    }
+  };
+
+  cargarMercados();
+}, []);
 
   useEffect(() => {
   const cargarMetricas = async () => {
@@ -122,6 +146,7 @@ const cambiarFiltro = (campo, valor) => {
 
 const limpiarFiltros = () => {
   setFiltros({
+    mercado: "",
     categoria: "",
     genero: "",
     edadMin: "",
@@ -251,9 +276,8 @@ const generarPDF = () => {
  const filtrosActivos = Object.values(filtros)
   .some((valor) => valor !== "");
 
-const tituloReporte = filtrosActivos
-  ? "Reporte filtrado - Censo Humboldt"
-  : "Reporte de resultados - Censo Humboldt";
+const tituloReporte = "Reporte de resultados - Censo de Mercados";
+const mercadoSeleccionado = filtros.mercado || "Todos los mercados";
 
   const porcentaje = (cantidad, base = total) => {
     const cantidadNumero = Number(cantidad) || 0;
@@ -270,28 +294,36 @@ const tituloReporte = filtrosActivos
 
   // ENCABEZADO
 
-  doc.setFontSize(18);
-  doc.text(
+  // ENCABEZADO
+
+doc.setFontSize(18);
+doc.text(
   tituloReporte,
   14,
   18
 );
 
-  doc.setFontSize(10);
+doc.setFontSize(11);
 
-  doc.text(
-    `Total de censos registrados: ${total}`,
-    14,
-    27
-  );
+doc.text(
+  `Mercado / Plaza: ${mercadoSeleccionado}`,
+  14,
+  27
+);
 
-  doc.text(
-    `Fecha de generación: ${new Date().toLocaleDateString(
-      "es-MX"
-    )}`,
-    14,
-    33
-  );
+doc.text(
+  `Total de censos registrados: ${total}`,
+  14,
+  33
+);
+
+doc.text(
+  `Fecha de generación: ${new Date().toLocaleDateString(
+    "es-MX"
+  )}`,
+  14,
+  39
+);
 
   const obtenerNombreCategoria = () => {
   const categoria =
@@ -329,6 +361,13 @@ const obtenerNombreEquipamiento = () => {
 };
 
 const listaFiltros = [];
+
+if (filtros.mercado) {
+  listaFiltros.push([
+    "Mercado / Plaza",
+    filtros.mercado,
+  ]);
+}
 
 if (filtros.categoria) {
   listaFiltros.push([
@@ -417,7 +456,7 @@ if (filtros.equipamiento) {
   // RESUMEN GENERAL
 
   autoTable(doc, {
-    startY: 42,
+    startY: 48,
 
     head: [
       [
@@ -680,9 +719,16 @@ body: datos.bancos.map((item) => [
   .toISOString()
   .slice(0, 10);
 
-const nombreArchivo = filtrosActivos
-  ? `reporte-censo-humboldt-filtrado-${fecha}.pdf`
-  : `reporte-censo-humboldt-${fecha}.pdf`;
+const nombreMercadoArchivo = filtros.mercado
+  ? filtros.mercado
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+  : "todos-los-mercados";
+
+const nombreArchivo =
+  `reporte-censo-mercados-${nombreMercadoArchivo}-${fecha}.pdf`;
 
 doc.save(nombreArchivo);
 
@@ -722,6 +768,35 @@ doc.save(nombreArchivo);
 
 
   <div className="grid-filtros">
+
+    {/* MERCADO / PLAZA */}
+
+<div className="campo">
+  <label>Mercado / Plaza</label>
+
+  <select
+    value={filtros.mercado}
+    onChange={(e) =>
+      cambiarFiltro(
+        "mercado",
+        e.target.value
+      )
+    }
+  >
+    <option value="">
+      Todos los mercados
+    </option>
+
+    {mercados.map((mercado) => (
+      <option
+        key={mercado.id_mercado}
+        value={mercado.nombre}
+      >
+        {mercado.nombre}
+      </option>
+    ))}
+  </select>
+</div>
 
     {/* CATEGORÍA */}
 

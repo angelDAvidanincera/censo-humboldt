@@ -2,13 +2,18 @@ const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
 
-const carpetaDatos = path.join(__dirname, "../../../data");
+const carpetaDatos =
+  process.env.CENSO_DATA_DIR ||
+  path.join(__dirname, "../../../data");
 
 if (!fs.existsSync(carpetaDatos)) {
   fs.mkdirSync(carpetaDatos, { recursive: true });
 }
 
-const rutaDB = path.join(carpetaDatos, "censo-humboldt.db");
+const rutaDB = path.join(
+  carpetaDatos,
+  "censo-humboldt.db"
+);
 
 const db = new Database(rutaDB);
 
@@ -21,6 +26,12 @@ db.exec(`
     codigo TEXT NOT NULL UNIQUE,
     nombre TEXT NOT NULL UNIQUE
   );
+
+  CREATE TABLE IF NOT EXISTS mercados (
+  id_mercado INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL UNIQUE,
+  activo INTEGER NOT NULL DEFAULT 1
+);
 
   CREATE TABLE IF NOT EXISTS comerciantes (
     id_comerciante INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -174,6 +185,31 @@ const categorias = [
 
 for (const [codigo, nombre] of categorias) {
   insertarCategoria.run(codigo, nombre);
+}
+
+const mercados = [
+  "Mercado Independencia",
+  "Mercado Revolución",
+  "Mercado Nicolás Bravo",
+  "Mercado Valentín Gómez Farías",
+  "Mercado Vasco de Quiroga",
+  "Mercado Benito Juárez",
+  "Mercado Miguel Hidalgo",
+  "Plaza San Juan",
+  "Plaza Capuchinas",
+  "Plaza Humboldt",
+  "Plaza Allende",
+  "Plaza San Francisco",
+  "Plaza Manantiales"
+];
+
+const insertarMercado = db.prepare(`
+  INSERT OR IGNORE INTO mercados (nombre)
+  VALUES (?)
+`);
+
+for (const mercado of mercados) {
+  insertarMercado.run(mercado);
 }
 
 
