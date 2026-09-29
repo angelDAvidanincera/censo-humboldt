@@ -15,7 +15,9 @@ const equipamientosRoutes = require("./routes/equipamientosRoutes");
 const censosRoutes = require("./routes/censosRoutes");
 const metricasRoutes = require("./routes/metricasRoutes");
 const mercadosRoutes = require("./routes/mercadosRoutes");
-
+const cursosRoutes = require("./routes/cursosRoutes");
+const participantesRoutes = require("./routes/participantesRoutes");
+const asistenciasRoutes = require("./routes/asistenciasRoutes");
 const app = express();
 
 const PORT = process.env.PORT || 3000;
@@ -29,7 +31,9 @@ app.use("/api/equipamientos", equipamientosRoutes);
 app.use("/api/censos", censosRoutes);
 app.use("/api/metricas", metricasRoutes);
 app.use("/api/mercados", mercadosRoutes);
-
+app.use("/api/cursos", cursosRoutes);
+app.use("/api/participantes", participantesRoutes);
+app.use("/api/asistencias", asistenciasRoutes);
 app.get("/", (req, res) => {
   res.json({
     mensaje: "API Censo Humboldt funcionando",

@@ -20,6 +20,84 @@ const db = new Database(rutaDB);
 db.pragma("foreign_keys = ON");
 db.pragma("journal_mode = WAL");
 
+// ======================================================
+// RESPALDO AUTOMÁTICO DE LA BASE DE DATOS
+// ======================================================
+
+const carpetaRespaldos = path.join(
+  carpetaDatos,
+  "respaldos"
+);
+
+function crearRespaldoAutomatico() {
+  // Si la base de datos es nueva, todavía no hay
+  // registros que necesitemos respaldar.
+  const tablas = db
+    .prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = 'censos'
+    `)
+    .get();
+
+  if (!tablas) {
+    console.log(
+      "Base de datos nueva: no requiere respaldo previo."
+    );
+    return;
+  }
+
+  fs.mkdirSync(carpetaRespaldos, {
+    recursive: true,
+  });
+
+  // Fecha y hora para identificar cada respaldo.
+  const fecha = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-");
+
+  const nombreRespaldo =
+    `censo-mercados-${fecha}.db`;
+
+  const rutaRespaldo = path.join(
+    carpetaRespaldos,
+    nombreRespaldo
+  );
+
+  // VACUUM INTO crea una copia consistente de SQLite,
+  // incluso cuando la base utiliza el modo WAL.
+  db.prepare("VACUUM INTO ?")
+    .run(rutaRespaldo);
+
+  console.log(
+    "Respaldo automático creado:",
+    rutaRespaldo
+  );
+
+  // Conservar únicamente los 10 respaldos
+  // automáticos más recientes.
+  const respaldos = fs
+    .readdirSync(carpetaRespaldos)
+    .filter(
+      (archivo) =>
+        archivo.startsWith("censo-mercados-") &&
+        archivo.endsWith(".db")
+    )
+    .sort()
+    .reverse();
+
+  for (const archivo of respaldos.slice(10)) {
+    fs.unlinkSync(
+      path.join(carpetaRespaldos, archivo)
+    );
+  }
+}
+
+// IMPORTANTE:
+// Ejecutar antes de crear tablas o aplicar migraciones.
+crearRespaldoAutomatico();
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS categorias_giro (
     id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,7 +239,75 @@ db.exec(`
     CHECK (aceptaron >= 0),
     CHECK (aceptaron <= abordados)
   );
+CREATE TABLE IF NOT EXISTS cursos (
+  id_curso INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL,
+  fecha_inicio TEXT,
+  fecha_fin TEXT,
+  activo INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS participantes_curso (
+  id_participante INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre_completo TEXT NOT NULL,
+  telefono TEXT,
+  id_mercado INTEGER,
+  id_curso INTEGER NOT NULL,
+  fecha_registro TEXT DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (id_mercado)
+    REFERENCES mercados(id_mercado),
+
+  FOREIGN KEY (id_curso)
+    REFERENCES cursos(id_curso)
+);
+
+CREATE TABLE IF NOT EXISTS asistencias (
+  id_asistencia INTEGER PRIMARY KEY AUTOINCREMENT,
+  id_participante INTEGER NOT NULL,
+  id_curso INTEGER NOT NULL,
+  fecha TEXT NOT NULL,
+
+  FOREIGN KEY (id_participante)
+    REFERENCES participantes_curso(id_participante),
+
+  FOREIGN KEY (id_curso)
+    REFERENCES cursos(id_curso),
+
+  UNIQUE (id_participante, id_curso, fecha)
+);
+
 `);
+
+// ======================================================
+// MIGRACIONES
+// ======================================================
+
+// Verificar si participantes_curso ya tiene id_curso
+const columnasParticipantes = db
+  .prepare(`PRAGMA table_info(participantes_curso)`)
+  .all();
+
+const existeIdCurso = columnasParticipantes.some(
+  (columna) => columna.name === "id_curso"
+);
+
+if (!existeIdCurso) {
+  console.log(
+    "Migración: agregando id_curso a participantes_curso..."
+  );
+
+  db.exec(`
+    ALTER TABLE participantes_curso
+    ADD COLUMN id_curso INTEGER
+    REFERENCES cursos(id_curso);
+  `);
+
+  console.log(
+    "Migración completada: participantes_curso.id_curso creado"
+  );
+}
 
 // ======================================================
 // CATÁLOGOS INICIALES

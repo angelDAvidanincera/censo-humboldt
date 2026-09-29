@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import Registros from "./components/Registros";
 import Metricas from "./components/Metricas";
+import Asistencia from "./components/Asistencia";
 
 const estadoInicial = {
   nombre_completo: "",
@@ -347,6 +348,13 @@ function App() {
     >
       Métricas
     </button>
+
+    <button
+  className={vista === "asistencia" ? "activo" : ""}
+  onClick={() => setVista("asistencia")}
+>
+  Asistencia
+</button>
   </div>
 </nav>
 
@@ -866,6 +874,12 @@ function App() {
   {vista === "metricas" && (
     <Metricas />
   )}
+
+  {vista === "asistencia" && (
+    <Asistencia />
+  )}
+
+  
 
 </main>
 
